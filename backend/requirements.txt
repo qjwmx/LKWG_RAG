@@ -1,0 +1,45 @@
+# ---- Web 框架 ----
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# ---- 数据 ----
+sqlalchemy>=2.0.30
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+numpy>=1.26.0
+
+# ---- 鉴权 ----
+PyJWT>=2.8.0
+
+# ---- LangChain / LangGraph：RAG 编排与流式 ----
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+langchain-text-splitters>=0.3.0
+langgraph>=0.2.0
+# 攻略模式的多轮追问记忆（SqliteSaver）。
+#
+# 为什么显式声明：langgraph 本体只带 InMemorySaver，落盘的那个在**独立包**里。
+# 不装它时 get_saver() 会退化成 InMemorySaver 并记 warning——
+# 功能不缺失（同一进程内追问照常），但**重启后线程记忆丢失**。
+# 那种"看起来正常、其实重启就忘"的行为很难归因，所以直接列进依赖。
+langgraph-checkpoint-sqlite>=2.0.0
+
+# ---- 文档解析 ----
+pypdf>=4.2.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+
+# ---- 嵌入与外部服务 ----
+openai>=1.40.0
+httpx>=0.27.0
+
+# ---- 缓存与共享状态（可选）----
+# REDIS_URL 留空时全部走进程内实现，不装这个包也能跑。
+# 装上它才能用 Redis 共享令牌吊销名单、登录限流计数与查询向量缓存。
+redis>=5.0
+
+# ---- 测试 ----
+pytest>=8.2.0
+# 测试用内存版 Redis，不依赖真实服务
+fakeredis>=2.20.0

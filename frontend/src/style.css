@@ -1,0 +1,771 @@
+/* ===========================================================================
+   Tailwind CSS 4 + DaisyUI 5
+   ---------------------------------------------------------------------------
+   Tailwind 4 是 CSS-first 配置：不再有 tailwind.config.js，
+   插件与主题都在 CSS 里用 @plugin / @theme 声明。
+
+   自定义主题时必须**同时**给 *-content 变量（如 --color-primary-content），
+   否则 chat-bubble 内的文字对比度会失效（文字与背景同色，看起来像空白）。
+   =========================================================================== */
+
+@import "tailwindcss";
+
+/* 主题：lofi（浅）+ business（深）。
+ *
+ * 为什么是这两个（有数据依据，不是凭观感挑的）：
+ * - lofi 正文对比度 21:1、次要文字 7.44:1，是 35 个内置主题里最高的；
+ *   primary 是纯黑，最接近 Linear / Vercel 那种"黑白分明、无彩色干扰"的观感。
+ * - business 是唯一 `radius 0.25rem + depth 0` 的深色主题，几何上与极简风一致。
+ *
+ * 注意：全部 35 个内置主题的 base 色阶彩度都是 0（纯灰），
+ * 所以"极简灰阶"不是选哪个主题的问题——任何主题都是灰的。
+ * 主题之间真正的差别是 radius / depth / primary 色相。 */
+@plugin "daisyui" {
+  themes: lofi --default, business --prefersdark;
+}
+
+/* 品牌主题：在官方主题基础上覆写少量变量。
+ *
+ * **必须同时给 *-content**，否则文字与背景同色（看起来像空白）。
+ *
+ * 统一几何令牌的原因：官方主题各自的 radius 不一致
+ * （lofi 的 selector 是 2rem、business 是 0），直接混用会出现
+ * "浅色主题圆角大、深色主题圆角方"的割裂。这里统一成一套。 */
+@plugin "daisyui/theme" {
+  name: "lofi";
+  default: true;
+  color-scheme: light;
+
+  --color-primary: oklch(52% 0.16 258);
+  --color-primary-content: oklch(98% 0.01 258);
+  --color-secondary: oklch(58% 0.13 200);
+  --color-secondary-content: oklch(98% 0.01 200);
+  --color-accent: oklch(62% 0.15 160);
+  --color-accent-content: oklch(98% 0.01 160);
+
+  --radius-box: 0.625rem;
+  --radius-field: 0.375rem;
+  --radius-selector: 0.375rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "business";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-primary: oklch(70% 0.14 258);
+  --color-primary-content: oklch(18% 0.03 258);
+  --color-secondary: oklch(72% 0.11 200);
+  --color-secondary-content: oklch(18% 0.03 200);
+  --color-accent: oklch(74% 0.13 160);
+  --color-accent-content: oklch(18% 0.03 160);
+
+  --radius-box: 0.625rem;
+  --radius-field: 0.375rem;
+  --radius-selector: 0.375rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* 让 dark: 前缀跟随 daisyUI 的 data-theme，而不是操作系统的 prefers-color-scheme。
+   不写这行的话，用户手动切到浅色主题、但系统是暗色时，
+   dark: 样式仍会生效，出现半明半暗的界面。 */
+@custom-variant dark (&:where([data-theme=business], [data-theme=business] *));
+
+/* --------------------------------------------------------------------------- 属性色板
+ *
+ * 18 个属性各有独立颜色。这套值由 scripts/optimize_palette.py 搜索得到，
+ * 并由 scripts/verify_palette.py 验收，两个硬指标：
+ *
+ *   1. 任意两属性加权 RGB 距离 ≥ 110（实测最小 113.5）
+ *   2. chip 文字在明暗两套主题下对比度 ≥ 4.5:1（实测最低 4.95）
+ *
+ * 为什么需要这么严：上一版把 18 个属性映射到 **9 个** daisyUI 语义类
+ * （水/冰/翼 同为 badge-info，光/地/电 同为 badge-warning，
+ * 毒/萌/幽 同为 badge-secondary…），那是界面"什么都长得一样"的主因。
+ * 而旧的那套 hex 板本身也不可区分（普通/机械 d=19、火/武 d=29）。
+ *
+ * 改色板后**必须重跑** `python -m scripts.verify_palette`。
+ */
+:root,
+[data-theme="lofi"] {
+  --attr-normal: oklch(72% 0.006 0);
+  --attr-grass: oklch(64% 0.17 145);
+  --attr-fire: oklch(60% 0.2 32);
+  --attr-water: oklch(58% 0.15 248);
+  --attr-light: oklch(80% 0.15 78);
+  --attr-ground: oklch(52% 0.1 62);
+  --attr-ice: oklch(84% 0.09 182.8);
+  --attr-dragon: oklch(46% 0.18 273.3);
+  --attr-electric: oklch(88% 0.19 112);
+  --attr-poison: oklch(52% 0.21 318);
+  --attr-bug: oklch(74% 0.17 128);
+  --attr-fighting: oklch(44% 0.19 18);
+  --attr-flying: oklch(73.7% 0.12 233.7);
+  --attr-fairy: oklch(78% 0.13 352);
+  --attr-ghost: oklch(35.8% 0.14 288);
+  --attr-dark: oklch(38% 0.03 45);
+  --attr-psychic: oklch(64% 0.24 332);
+  --attr-steel: oklch(54% 0.045 235);
+}
+
+/* 深色主题复用同一套色板：对比度已经按 business 的底色验算过。
+   不另调一套的原因：同一只精灵在两个主题下颜色不同，会让人怀疑数据不一致。 */
+[data-theme="business"] {
+  --attr-normal: oklch(72% 0.006 0);
+  --attr-grass: oklch(64% 0.17 145);
+  --attr-fire: oklch(60% 0.2 32);
+  --attr-water: oklch(58% 0.15 248);
+  --attr-light: oklch(80% 0.15 78);
+  --attr-ground: oklch(52% 0.1 62);
+  --attr-ice: oklch(84% 0.09 182.8);
+  --attr-dragon: oklch(46% 0.18 273.3);
+  --attr-electric: oklch(88% 0.19 112);
+  --attr-poison: oklch(52% 0.21 318);
+  --attr-bug: oklch(74% 0.17 128);
+  --attr-fighting: oklch(44% 0.19 18);
+  --attr-flying: oklch(73.7% 0.12 233.7);
+  --attr-fairy: oklch(78% 0.13 352);
+  --attr-ghost: oklch(35.8% 0.14 288);
+  --attr-dark: oklch(38% 0.03 45);
+  --attr-psychic: oklch(64% 0.24 332);
+  --attr-steel: oklch(54% 0.045 235);
+}
+
+/* 属性 chip：底/边/字全部由单个 --attr 变量派生，
+   于是新增属性只需加一行变量，不用写三条规则。
+
+   文字色往 base-content 混的比例（浅 60% / 深 40%）是搜出来的：
+   不混的话，光/电/冰/萌 在白底上读不清、恶/幽/龙/武 在深色底上读不清。
+   这两个比例与 scripts/verify_palette.py 里的常量必须一致。
+
+   同样用 `@utility`（见下方 .surface 的说明）：写裸 CSS 会压过
+   同一元素上的 Tailwind 工具类，导致调用处的覆写静默失效。 */
+@utility attr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--radius-selector);
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  white-space: nowrap;
+  color: color-mix(in oklab, var(--attr) 60%, var(--color-base-content));
+  /* ★ 底与边混的是 **base-100**，不是 transparent。
+   *
+   * 混 transparent 时，chip 的底色 = 属性色叠在"它背后的任何东西"上。
+   * 有壁纸时那个"背后的东西"是壁纸（颜色不可控），实测：
+   * 靛蓝壁纸下 chip 底色被拉成 (209,226,247)，对比度从 5.48 掉到 4.47，
+   * 低于 4.5 的下限。
+   *
+   * 混 base-100 后 chip 底色变成**自足**的——不管背后是壁纸、卡片还是
+   * 正文，底色都只由主题与属性色决定。这正是 glass_budget.py 验算的工况，
+   * 于是"验算值 = 实测值"。
+   *
+   * 代价是 chip 不再透出壁纸。对这么小的一个标签来说这是对的取舍：
+   * 它是"要读的标签"，不是"装饰性玻璃"。
+   *
+   * 用 `in oklab` 而不是 `in oklch`：见本文件顶部的说明——
+   * oklch 的色相走最短弧，而 base-100 的色相被显式写成 0，
+   * 于是"水(248°)混白"会绕经品红，渲染成品红底而不是淡蓝底。 */
+  background-color: color-mix(in oklab, var(--attr) 16%, var(--color-base-100));
+  border: 1px solid color-mix(in oklab, var(--attr) 32%, transparent);
+}
+
+[data-theme="business"] .attr-chip {
+  color: color-mix(in oklab, var(--attr) 40%, var(--color-base-content));
+  background-color: color-mix(in oklab, var(--attr) 22%, var(--color-base-100));
+  border-color: color-mix(in oklab, var(--attr) 42%, transparent);
+}
+
+/* 选中态：实心属性色 + 反色文字。
+   属性色是中间调，配黑或白文字都可能不够——用 color-mix 保证
+   无论属性色深浅，文字都有足够对比度。 */
+@utility attr-chip-active {
+  color: color-mix(in oklab, var(--color-base-100) 92%, var(--attr));
+  background-color: var(--attr);
+  border-color: var(--attr);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------- 设计令牌 */
+
+:root {
+  /* 头部高度：全站 4 处 h-[calc(100vh-3.5rem)] 与 AppShell 的 h-14 是隐式耦合，
+     改一处忘一处就会高度错位。抽成变量后只有一个来源。 */
+  --shell-header-h: 3.5rem;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+
+  /* 极简风的层次靠"极浅的层次差 + 极细的边框"，不靠阴影堆叠。
+     边框用 color-mix 从 base-content 派生，明暗两套主题自动适配。 */
+  --hairline: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  --hairline-strong: color-mix(in oklch, var(--color-base-content) 22%, transparent);
+}
+
+/* =========================================================================== 壁纸与毛玻璃
+ *
+ * 这一节的数值不是"看着调的"，是 scripts/glass_budget.py 解出来的。
+ * 改任何一项之前先跑 `python -m scripts.glass_budget --verify`。
+ *
+ * 结构（自下而上）
+ * ---------------
+ *   wallpaper  壁纸层：**清晰、不模糊**，壁纸本身要看得见
+ *   region     页面结构层（顶栏 / 侧栏 / 内容区）：毛玻璃做在这里
+ *   card       区域内的卡片：只叠一层半透明填充，不再 blur
+ *   panel      浮层（菜单 / 弹窗）：面积小，自己再 blur 一次
+ *
+ * ★ 关键取舍：毛玻璃做在**页面元素**上，而不是做一整块全屏模糊层。
+ * 一开始的写法是一张全屏 `.glass-canvas` 铺满屏、把壁纸整体糊掉，
+ * 结果是"壁纸白加了"——无论选哪张壁纸看起来都是同一片灰雾，
+ * 而卡片反而没有玻璃质感。正确做法是让壁纸保持清晰，
+ * 由每个结构层各自对自己的背景做模糊。
+ *
+ * 为什么必须**分主题**给不透明度
+ * -----------------------------
+ * 毛玻璃把"文字压在什么底色上"从编译期常量变成了运行期变量
+ * （取决于用户选的壁纸）。而两套主题的对比度余量差了三倍：
+ *
+ *     lofi      base-100 纯白 / base-content 纯黑  → 满对比度 21.00:1
+ *     business  base-100 oklch(24.35%)            → 满对比度 10.26:1
+ *
+ * 所以同一个不透明度不可能两边都合适：
+ * - 取 58%（够透，壁纸看得清）→ business 下浅色字压在透亮的白壁纸上直接糊掉；
+ * - 取 82%（够实）→ lofi 下玻璃厚得像不透明面板，壁纸白加了。
+ *
+ * 最坏情况是壁纸与主题底色**方向相反**时：
+ * 浅色主题 + 全黑壁纸、深色主题 + 全白壁纸。下面这组值按这个上界选。
+ *
+ * ★ region 是最紧的一层：顶栏/侧栏上的文字底下**只有 region 这一层**，
+ * 所以它的不透明度由"最弱文字"单独决定，不能再往下调。
+ */
+:root,
+[data-theme="lofi"] {
+  /* 壁纸层。由 useWallpaper.ts 在运行期写入这两个变量；
+     --wallpaper-image 为 none 时整层不绘制（等于"无壁纸"）。 */
+  --wallpaper-image: none;
+  --wallpaper-opacity: 0.85;
+
+  /* ---------------------------------------------------------------------
+   * ★ 内容区**没有玻璃层**——这是三次修正后的最终结论
+   * ---------------------------------------------------------------------
+   * 演进过程（每一步都被实测否掉，记下来免得再走回头路）：
+   *
+   *   1. 全屏 .glass-canvas 对整个壁纸做模糊
+   *      → 壁纸变成一片灰雾，选哪张都一样
+   *   2. 内容区做 58%/72% 的整块玻璃
+   *      → 壁纸可见份额只剩 18.9%/12.6%，用户说"上传了没生效"
+   *   3. 内容区降到 28%/40%
+   *      → **平均色差通过了**（25~80），但用户仍说"看不见壁纸"
+   *
+   * 第 3 步为什么还是不行：平均色差只说明"颜色变了"，
+   * 不说明"能认出这是一张图"。用 80px 棋盘格实测
+   * （scripts/probe_wallpaper_detail.py）：
+   *
+   *     配置                    R−B 标准差   纯色点比例
+   *     region 有 blur（28%）        54.2          0%   ← 只剩色晕
+   *     region 不 blur（28%）       133.2          0%   ← 仍是色晕！
+   *     region 完全去掉             184.4         86%   ← 结构清晰
+   *
+   * 关键发现：**即使不模糊，28% 的白色填充也足以把壁纸冲淡**。
+   * 只要内容区铺一层半透明白，壁纸就永远不可能清晰——
+   * 而它铺满整个视口，所以壁纸在任何地方都不清晰。
+   *
+   * 所以内容区不加玻璃：壁纸原样显示，可读性完全交给卡片（.surface）。
+   *
+   *   --glass-chrome-alpha   顶栏/侧栏：文字**直接**压在上面 → 必须够实
+   *   --surface-alpha        内容区卡片：文字都在这层上 → 必须够实
+   */
+  --glass-chrome-alpha: 62%;
+  --surface-alpha: 55%;
+  --glass-panel-alpha: 88%;
+
+  /* ★ 「玻璃感」靠模糊强度与饱和度，不靠透明度（透明度被对比度卡死了）。
+   * 模糊把壁纸的锐利细节抹平、只留大块明暗；饱和度补偿让色彩更浓地透出来。
+   * 两者都不改变背景的平均亮度，而最坏壁纸是纯黑/纯白（没有色度，
+   * saturate 对它们是空操作），所以加大这两个值不会破坏已验算的对比度。 */
+  --glass-blur: 20px;
+  --glass-saturate: 1.6;
+}
+
+[data-theme="business"] {
+  /* 深色主题统一加厚：余量只有浅色的一半，见上面的推导。 */
+  --glass-chrome-alpha: 82%;
+  --surface-alpha: 86%;
+  --glass-panel-alpha: 92%;
+
+  --glass-blur: 22px;
+  --glass-saturate: 1.45;
+}
+
+/* 全屏壁纸层。**不做模糊**——这是"壁纸功能"的本体，糊掉就没有意义了。
+ *
+ * 用图层 opacity 而不是把透明度写进颜色：壁纸可能是任意图片或渐变，
+ * 改 alpha 得动图片本身；图层 opacity 对两者一律适用。
+ * background-image 直接吃 var()，所以渐变与 url() 可以共用同一个变量。 */
+@utility wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--wallpaper-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: var(--wallpaper-opacity);
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+/* 内容区：**不加任何玻璃**，壁纸原样显示。
+ *
+ * 这个类名保留下来（内容区仍在用），但样式是空的——它只做一件事：
+ * 声明"这里是内容区"。保留它而不是删掉引用，是因为以后若要给内容区
+ * 加边框/内边距之类的结构性样式，有个明确的挂载点。
+ *
+ * ★ 为什么是空的：见本文件顶部对 region 的推导。
+ * 铺一层半透明白（哪怕只有 28%、哪怕不模糊）就足以把壁纸冲淡成
+ * 一片没有细节的色晕——实测 80px 棋盘格的纯色点比例从 86% 掉到 0%。
+ * 而它铺满整个视口，于是壁纸在任何地方都不清晰。
+ *
+ * 内容区的可读性由卡片（.surface）负责，不由这一层负责。 */
+@utility glass-region {
+  background-color: transparent;
+}
+
+/* 没有 backdrop-filter 时（老浏览器）退化成"更实的半透明底"。
+ * 方向是单向的：只可能更不透明 → 对比度只会更高，不会更差。
+ * 注意 .glass-region 不在此列：它本来就是透明的，退化也不需要加厚。 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-chrome {
+    background-color: color-mix(in oklch, var(--color-base-100) 90%, transparent);
+  }
+
+  .glass-panel {
+    background-color: color-mix(in oklch, var(--color-base-100) 96%, transparent);
+  }
+}
+
+/* 玻璃浮层：下拉菜单、弹窗这类浮在**内容**之上的面板。
+ *
+ * 与结构层的区别：它们背后是变化的正文，只叠半透明色会"字透字"
+ * （两层文字叠在一起，两边都读不清）。所以不透明度更高，
+ * 并且自己再做一次模糊——它下面那层已经被模糊过的内容仍然有文字轮廓。 */
+@utility glass-panel {
+  background-color: color-mix(
+    in oklch,
+    var(--color-base-100) var(--glass-panel-alpha),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--hairline);
+}
+
+/* --------------------------------------------------------------------------- 文字层级
+ *
+ * 毛玻璃把"次要文字能淡到多少"变成了一条**硬下限**：
+ * 文字自身被稀释后，无论面板做多厚都不达标（面板只影响底色，不影响文字与底色的比）。
+ *
+ * 实测（纯主题底色、无壁纸）：
+ *
+ *              lofi    business
+ *   opacity-50  3.98    3.62      ← 本来就不达标
+ *   opacity-55  4.76    4.08      ← business 不达标
+ *   opacity-60  5.74    4.59
+ *   opacity-70  8.52    5.73
+ *
+ * 也就是说项目原有的 112 处 opacity-45…65 **在加壁纸之前就已经有
+ * 一部分不达标**，只是旧探针只检查了 55/60/65 三档，把 50 及以下漏掉了。
+ *
+ * 这里给出两档语义化层级，替代散落的 opacity-*：
+ *   最弱 0.78（= glass_budget.py 的 muted_floor，壁纸开到上限仍 ≥4.5:1）
+ *   次要 0.86
+ *
+ * 用 color-mix 而不是 opacity：opacity 会把子元素（图标、徽标）一起淡化，
+ * 改 color 只影响文字本身。对纯文字元素两者等价，对含子元素的元素前者才是对的。 */
+@utility ink-muted {
+  color: color-mix(in oklch, var(--color-base-content) 86%, transparent);
+}
+
+@utility ink-subtle {
+  color: color-mix(in oklch, var(--color-base-content) 78%, transparent);
+}
+
+/* 统一表面：卡片/面板的基准样式。
+   取代散落各处的 `card card-border bg-base-100`。
+
+   ★ 必须用 `@utility` 而不是普通 `.surface { }` 规则。
+   Tailwind 4 把所有工具类放进 `@layer utilities`，而**未分层的 CSS 规则
+   优先级高于任何 @layer**。写成普通类的话，`.surface` 的 `border` 会
+   压过同一元素上的 `border-primary/60`——选中态静默失效，
+   而且因为两边都是 1px 实线、颜色差异又小，肉眼很难发现。
+   （实测确认过：`.surface.border-primary/60` 的 borderColor 仍是
+   `--hairline`，即 `oklch(0 0 0 / 0.12)`。）
+
+   这是 daisyUI 官方 usage 指南第 7 条的要求：
+   全局改组件样式用 `@utility`，不要写裸 CSS。 */
+@utility surface {
+  background-color: color-mix(in oklch, var(--color-base-100) var(--surface-alpha), transparent);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+}
+
+/* 顶栏 / 侧栏这类"内容会从下面滚过去"的常驻骨架。
+ *
+ * ★ 它比 .glass-region **厚得多**（62% / 82% vs 28% / 40%），这是有意的：
+ * 顶栏与侧栏上的文字**直接压在这一层上**，底下没有卡片再兜一层，
+ * 所以它必须自己满足最弱文字的对比度。实测 business 在 42% 时，
+ * 最弱文字压在白色壁纸上只有 2.84:1，远低于 4.5。
+ *
+ * 内容区则相反：那里文字都在 .surface 卡片上，所以背景可以很轻、
+ * 让壁纸透出来。两个地方的要求不同，值就必须不同。 */
+@utility glass-chrome {
+  background-color: color-mix(
+    in oklch,
+    var(--color-base-100) var(--glass-chrome-alpha),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+@utility surface-interactive {
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    border-color: var(--hairline-strong);
+    transform: translateY(-2px);
+  }
+}
+
+/* 错峰入场：列表项逐个浮现。
+   上限 12 阶——长列表末尾若线性叠加延迟，用户会等很久才看到内容。 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility rise-in {
+  animation: rise-in var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 28ms);
+}
+
+/* --------------------------------------------------------------------------- 排版插件 */
+
+@plugin "@tailwindcss/typography";
+
+/* --------------------------------------------------------------------------- 全局 */
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei",
+    "PingFang SC", "Hiragino Sans GB", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===========================================================================
+ * ★ 为什么这里的 color-mix 全部用 `in oklab` 而不是 `in oklch`
+ * ---------------------------------------------------------------------------
+ * daisyUI 的主题变量把中性色写成 `oklch(100% 0 0)` / `oklch(0% 0 0)`——
+ * 色相是**显式的 0**，而不是 `none`。而 `color-mix(in oklch, …)`
+ * 对色相走"最短弧"插值：从显式 0 到色相 >180 的颜色，最短弧是**负方向**，
+ * 于是混合结果会绕经品红。
+ *
+ * 实测（本文件原来的写法）：
+ *   mix(primary 258° 15%, base-100 0° 85%)
+ *     → 0×0.85 + (−102)×0.15 = −15.3 → 344.7°   （品红，不是靛蓝）
+ *   渲染值确认：oklch(0.928 0.024 344.7)
+ *
+ * 更严重的是**原有的语义色文字**也中招（这是既存缺陷，不是本次引入的）：
+ *   ink-success  应为绿(164°) → 实测 rgb(116,96,33) 棕黄
+ *   ink-info     应为蓝(206°) → 实测 rgb(73,79,113) 紫
+ * 对比度检查抓不到它——对比度只看明暗，不看色相，所以这个缺陷一直没暴露。
+ * （scripts/diag_color_mix.py 专门用于核对这两种插值的差异。）
+ *
+ * 修法：改用 `in oklab`。oklab 用直角坐标 (a, b) 插值，不涉及色相弧，
+ * 因此不会绕路，且仍在线性感知空间里混合。
+ *
+ * 注意：`color-mix(in oklch, <中性色>, transparent)` 这种**不涉及彩色色相**
+ * 的写法是安全的（两端色相都是 0），所以玻璃层那些保持 oklch 不变。
+ * =========================================================================== */
+
+/* --------------------------------------------------------------------------- 语义色文字
+ *
+ * **daisyUI 的 --color-error/success/warning/info 是"表面色"，不是"文字色"。**
+ * 直接拿它们写文字，在浅色主题下对比度极低——实测（lofi 白底）：
+ *
+ *   error 2.18 · success 1.27 · warning 1.47 · info 1.83
+ *
+ * 全部远低于 WCAG AA 的 4.5:1。这类问题肉眼不容易发现，
+ * 因为"浅色小字"看起来只是"有点淡"，而不是"看不清"。
+ * （本项目的对比度探针 scripts/probe_glass.py 会把它抓出来。）
+ *
+ * 修法是往 base-content 混 55%：既保住色相辨识度，又保证可读性。
+ * 实测混完后的最低值：浅色 6.12、深色 5.16，两套主题都过 AA。
+ *
+ * 用法：`<span class="ink-error">失败</span>`
+ * 背景仍可用 `tint-error`（表面色当底没问题）。
+ *
+ * 用 `@utility` 生成（理由同 .surface）：这样调用处的 Tailwind 工具类
+ * 仍能覆盖它，不会出现"加了 text-xxx 却不生效"。
+ */
+@utility ink-error {
+  color: color-mix(in oklab, var(--color-error) 55%, var(--color-base-content));
+}
+
+@utility ink-success {
+  color: color-mix(in oklab, var(--color-success) 55%, var(--color-base-content));
+}
+
+@utility ink-warning {
+  color: color-mix(in oklab, var(--color-warning) 55%, var(--color-base-content));
+}
+
+@utility ink-info {
+  color: color-mix(in oklab, var(--color-info) 55%, var(--color-base-content));
+}
+
+/* --------------------------------------------------------------------------- 自足底色
+ *
+ * 小标签（"PVP"、"root"、属性计数）用 `bg-primary/15` 这类半透明底时，
+ * 底色 = 品牌色叠在"背后的任何东西"上。有壁纸时那就是壁纸，
+ * 实测靛蓝壁纸下 `bg-primary/15 text-primary` 的对比度从 6.5 掉到 3.57。
+ *
+ * 这几个 utility 把底色混进 **base-100**，于是底色自足：
+ * 不管背后是壁纸、卡片还是正文，标签的底与字都由主题决定。
+ * 对"要读的小标签"这是正确取舍——它们不是装饰性玻璃。
+ *
+ * 用 `@utility` 而不是裸 CSS：调用处的 Tailwind 类仍能覆盖它。
+ */
+@utility tint-primary {
+  background-color: color-mix(in oklab, var(--color-primary) 15%, var(--color-base-100));
+}
+
+@utility tint-error {
+  background-color: color-mix(in oklab, var(--color-error) 14%, var(--color-base-100));
+}
+
+@utility tint-warning {
+  background-color: color-mix(in oklab, var(--color-warning) 16%, var(--color-base-100));
+}
+
+@utility tint-success {
+  background-color: color-mix(in oklab, var(--color-success) 14%, var(--color-base-100));
+}
+
+@utility tint-info {
+  background-color: color-mix(in oklab, var(--color-info) 14%, var(--color-base-100));
+}
+
+/* 中性小标签（"机械"这类灰底标签、计数药丸）。
+ * 混 base-100 而非 transparent，理由同上。 */
+@utility tint-neutral {
+  background-color: color-mix(in oklch, var(--color-base-content) 9%, var(--color-base-100));
+}
+
+/* --------------------------------------------------------------------------- 无障碍
+ *
+ * 尊重系统的"减少动态效果"设置：前庭功能障碍的用户会因为持续运动而头晕。
+ * 这是无障碍要求，不是可选项。
+ *
+ * daisyUI 的 aura / skeleton 等组件官方已内置 reduced-motion 处理
+ * （其 CSS 里有对应的 @media 分支），这里只兜住自己写的动效。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .surface-interactive {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .surface-interactive:hover {
+    transform: none;
+  }
+}
+
+/* 壁纸切换的淡入淡出也要关掉（它是"动效"，不是"信息"）。 */
+@media (prefers-reduced-motion: reduce) {
+  .wallpaper {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------- 流式回答 */
+
+/* 助手气泡里承载 Markdown 的容器。
+   contain 收窄回流范围：流式渲染时每个 token 都会改这里的高度，
+   不隔离的话整页都会参与重排。 */
+.chat-prose {
+  contain: content;
+  overflow-wrap: anywhere;
+
+  /* ★ 让 Markdown 的正文颜色**跟随气泡自己的文字色**，而不是 typography
+     插件默认的深色。
+
+     不写这段会出现「答案明明生成了，界面却是一片黑」：
+     - `.chat-bubble-neutral` 在**明暗两套主题下都是深色底**
+       （--color-neutral 实测 oklch(0.14)），气泡自身的 color 是浅色
+       （--color-neutral-content）；
+     - 但 typography 插件的 `--tw-prose-body` 默认是深色 oklch(21%)，
+       而 `dark:prose-invert` 只在深色主题下生效，浅色主题里**不匹配**；
+     - 结果：深色字压在深色气泡上，对比度接近 1:1。
+
+     症状极具误导性——用户看到一整块黑色，会以为"没有返回答案"，
+     而 store 里其实有完整内容、qa_logs 也已落库。
+
+     用 currentColor / inherit 而不是写死颜色：气泡换配色、明暗主题切换、
+     以及攻略页把 MarkdownBody 放在浅色卡片里，三种情况都能自适应。
+     按 CSS 规范，`currentColor` 用在 `color` 属性上时取**继承值**，
+     所以 `--tw-prose-body: currentColor` 不会自我循环。 */
+  color: inherit;
+
+  --tw-prose-body: currentColor;
+  --tw-prose-headings: currentColor;
+  --tw-prose-bold: currentColor;
+  --tw-prose-counters: color-mix(in oklch, currentColor 75%, transparent);
+  --tw-prose-bullets: color-mix(in oklch, currentColor 60%, transparent);
+  --tw-prose-quotes: currentColor;
+  --tw-prose-quote-borders: color-mix(in oklch, currentColor 30%, transparent);
+  --tw-prose-captions: color-mix(in oklch, currentColor 70%, transparent);
+  --tw-prose-hr: color-mix(in oklch, currentColor 20%, transparent);
+  --tw-prose-th-borders: color-mix(in oklch, currentColor 30%, transparent);
+  --tw-prose-td-borders: color-mix(in oklch, currentColor 15%, transparent);
+  /* 链接不跟随正文色（否则和普通文字分不出来），但也用 color-mix 往
+     currentColor 靠一点，保证在深色气泡里仍然读得清。 */
+  --tw-prose-links: color-mix(in oklab, var(--color-primary) 70%, currentColor);
+}
+
+.chat-prose a {
+  text-decoration: underline;
+}
+
+/* 流式输出时的光标。
+   用 ::after 画，不额外插入 DOM 节点——插节点会让 markdown-it 的输出
+   每次都要重新 diff，闪烁更明显。 */
+.streaming-cursor::after {
+  content: "";
+  display: inline-block;
+  width: 0.5ch;
+  height: 1em;
+  margin-left: 0.15em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  animation: cursor-blink 1s steps(2, start) infinite;
+}
+
+@keyframes cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* 引用高亮：点开引用后目标切片短暂闪一下，帮助用户定位。
+ *
+ * 只做动画，不设 border-radius —— 目标元素本身已经是 `.surface`，
+ * 圆角由 `--radius-box` 决定。在这里再写一个硬编码圆角，
+ * 一旦主题换了 radius 就会出现"高亮时圆角突然变了"的跳变。 */
+.chunk-highlight {
+  animation: chunk-flash 1.6s ease-out 1;
+}
+
+@keyframes chunk-flash {
+  0% {
+    background-color: color-mix(in oklab, var(--color-warning) 45%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* 代码块：highlight.js 输出的 <pre><code> 需要一点自己的样式，
+   因为 daisyUI 不管这个。 */
+.chat-prose pre {
+  margin: 0.75rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-box);
+  overflow-x: auto;
+  background-color: var(--color-neutral);
+  color: var(--color-neutral-content);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.chat-prose pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.chat-prose code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* 行内代码 */
+.chat-prose :not(pre) > code {
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  background-color: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  font-size: 0.875em;
+}
+
+.chat-prose table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.chat-prose th,
+.chat-prose td {
+  border: 1px solid var(--color-base-300);
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+}
+
+.chat-prose th {
+  background-color: var(--color-base-200);
+  font-weight: 600;
+}
+
+/* 滚动条：默认的粗滚动条在消息列表里很碍眼 */
+.scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-base-300) transparent;
+}
+
+.scrollbar-slim::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-slim::-webkit-scrollbar-thumb {
+  background-color: var(--color-base-300);
+  border-radius: 4px;
+}
+
+.scrollbar-slim::-webkit-scrollbar-track {
+  background: transparent;
+}

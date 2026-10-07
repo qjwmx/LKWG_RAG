@@ -1,0 +1,7 @@
+# pnpm 11 默认拦截依赖的安装脚本。esbuild（Vite 的依赖）必须在安装期
+# 下载/链接它的原生二进制，被拦掉的话 `vite build` 会直接失败。
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - daisyui@5.7.47

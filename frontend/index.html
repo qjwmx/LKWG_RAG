@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="lofi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>洛克王国：世界 · PvP 阵容攻略</title>
+    <!-- 首屏防闪烁：在 CSS/JS 加载之前就把主题定下来。
+         这里的 `lofi` 必须与 style.css 里启用的主题名一致——
+         原本写的是 `light`，而 `light` **没有被启用**，
+         于是 JS 跑起来之前的那一瞬间页面是完全没有主题变量的
+         （表现为"白底黑字的裸 HTML 闪一下"）。
+         用内联脚本读 localStorage，与 useTheme.ts 的 LEGACY 映射保持一致。 -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('rag_theme')
+          var map = { light: 'lofi', dark: 'business', lofi: 'lofi', business: 'business' }
+          var name = raw && map[raw]
+          if (!name) {
+            name = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'business' : 'lofi'
+          }
+          document.documentElement.setAttribute('data-theme', name)
+        } catch (e) {
+          /* 隐私模式下 localStorage 不可读，保留 HTML 上的默认值 */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

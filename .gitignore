@@ -1,0 +1,141 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 运行时数据（数据库、上传的原始文件、爬虫缓存、测试临时目录）
+backend/data/raw_documents/
+backend/data/test-tmp/
+
+# ★ 数据库：**必须用通配规则，不能只写 backend/data/*.db**。
+#
+# 只限定目录会漏掉三类真实存在的库（都含 checkpoints 表）：
+#   backend/ckpt_probe.db            —— checkpoint 探测脚本的产物
+#   backend/tmp0eoktpod/cp.db        —— 脚本用 tempfile 建库时回退到工作目录
+#   backend/tmp2hgp0ehn/cp2.db       —— 同上，目录名还是随机后缀
+# 它们**位置不可预测**，所以按扩展名兜底。漏掉它们的后果很具体：
+# 下次有人跑一遍 pytest / 探针脚本再 `git add -A`，就会把 checkpoint 库
+# （含真实对话线程与 findings）提交进公开仓库。
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.dump
+*.sql
+
+# tempfile 回退到工作目录时留下的临时目录（backend/tmp0eoktpod 等）。
+# 见 tests/conftest.py 里"系统临时目录不可写时会回退到当前工作目录"的说明。
+backend/tmp*
+
+# 爬虫缓存整体是运行时产物（阵容抓取结果），但**两个图片 URL 缓存例外**：
+#   pet_images.json / skill_icons.json
+# seed_loader 从它们读精灵头像与技能图标 URL（见 app/scraper/seed_loader.py），
+# 而 tests/test_roco.py 有 4 条断言要求"大部分精灵/技能有图"。
+# 它们只有 150KB 且**只含 bwiki 的公开图片 URL**，不含任何密钥或用户数据，
+# 所以随仓库分发——否则**克隆后跑 pytest 必挂 4 条**（新人会以为是代码坏了）。
+# 注意必须写成 `_scrape_cache/*` 而不是排除目录本身：目录被整体排除时，
+# 后面的 `!` 反选规则不会生效。
+backend/data/_scrape_cache/*
+!backend/data/_scrape_cache/pet_images.json
+!backend/data/_scrape_cache/skill_icons.json
+
+# 爬虫运行日志（run_scrape 的 Tee-Object 输出）
+backend/scrape_*.log
+
+# pytest 在某些情况下会把临时目录落在工作目录里（见 tests/conftest.py 的说明）
+backend/pytest-of-*/
+backend/.pytest_cache/
+
+# 色板搜索的中间产物（由 scripts/optimize_palette.py 生成）。
+# 最终色板**已固化在 frontend/src/style.css 与 scripts/verify_palette.py**，
+# 这个 JSON 只是搜索过程的留档，删掉不影响运行。
+backend/data/attr_palette.json
+
+# 截图脚本的预览产物
+backend/data/_shot/
+
+# **种子数据必须入库**：backend/data/_seed/ 是应用启动所必需的
+# （精灵图鉴、技能、阵容），删掉它 seed_loader 就跑不了。
+# 所以这里只忽略运行时产物，不忽略 _seed。
+
+# Node
+node_modules/
+frontend/dist/
+*.local
+
+# 本地配置与密钥 —— **本仓库会公开，这一节是最后一道防线**
+#
+# 只写 `.env` 是不够的：`.env.local`、`backend/.env.prod` 这类变体
+# 用默认规则一个都盖不住，而它们同样装着 LLM key 与 JWT 密钥。
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# 各类密钥/证书文件（不管放在哪一层）
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+*.ppk
+.pypirc
+.npmrc.local
+.netrc
+
+# 凭据导出与云平台配置
+credentials.json
+service-account*.json
+.aws/
+.gcloud/
+kubeconfig*
+
+# 本地数据库与转储的规则已统一放在文件开头（`*.db` 那一节），
+# 那里有完整说明：为什么必须用通配而不是限定 backend/data/。
+
+# 日志（可能含请求头里的 Authorization 与用户提问原文）
+*.log
+
+# 工具产物
+_acl-recovery/
+.pnpm-store/
+pip-build-tracker-*/
+pip-ephem-wheel-cache-*/
+pip-install-*/
+.idea/
+
+# 截图脚本（scripts/shot.py）的产物与临时 Chrome 数据目录。
+# Chrome 的用户数据目录**绝不能落在项目里**：Vite 监听整个项目目录，
+# 其中的缓存文件被锁住时会让 Vite 的 watcher 抛 EBUSY 直接崩掉。
+*.shot.png
+.shot/
+.chrome-*/
+
+# 视觉探针的截图产物（probe_glass / shot_glass 等生成，仅供人工核对）
+backend/_shot/
+backend/glass-probe/
+backend/wp-visible/
+backend/diag-*.png
+
+# Chrome 崩溃转储（Crashpad）。调试 CDP 时如果 Chrome 崩过，
+# 会在工作目录留下 rag-dbg/ 之类的 Crashpad 目录。
+rag-dbg/
+**/CrashpadMetrics-*.pma
+
+# 截图/探针脚本留下的 Chrome 用户数据目录（backend/ 下）。
+# **它们绝不能落在项目里**：Vite 监听整个项目目录，其中的缓存文件被锁住时
+# 会让 Vite 的 watcher 抛 EBUSY 直接崩掉。见上面 shot.py 的说明。
+backend/rag-shot-*/
+backend/rag-layers-*/
+backend/rag-probe-*/
+backend/rag-dbg/
+
+# 注：daisyUI 官方 Skill 装在**用户级** `~/.dsh/skills/daisyui`（不在仓库内），
+# 所以这里不需要为它加规则。见 README「官方 daisyUI Skill」。
