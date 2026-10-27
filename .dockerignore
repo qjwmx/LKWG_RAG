@@ -1,0 +1,49 @@
+# Docker 构建上下文排除规则。
+#
+# 只影响 `docker build`，不影响 git（.gitignore 单独生效）。
+# 目的：镜像构建时不要把本机的虚拟环境、node_modules、数据库、日志拷进上下文——
+# 那会让每次构建都传几百 MB，而且把本机状态带进镜像。
+#
+# 用法：Dockerfile 里写了 context: ../..（仓库根），Docker 会读这个文件。
+
+.git
+.gitignore
+.github
+
+# Python 虚拟环境与缓存
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+
+# 前端依赖与产物（产物在镜像内部重新构建，绝不能用本机的）
+**/node_modules
+**/dist
+
+# 运行时数据：数据库、上传原文、爬虫缓存、checkpoint
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/data/raw_documents
+**/data/test-tmp
+**/tmp*
+
+# 本地配置与密钥
+**/.env
+**/.env.*
+!**/.env.example
+
+# 日志与截图
+**/*.log
+**/*.shot.png
+**/_shot
+**/glass-probe
+**/wp-visible
+**/rag-*
+**/.chrome-*
+
+# 文档与部署脚本本身（镜像不需要，但保留 README 方便排查）
+docs
+deploy/nginx
+deploy/systemd
+deploy/install.sh

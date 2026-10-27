@@ -1,0 +1,5 @@
+# 构建产物与依赖（`.gitignore` 里已有 node_modules/ 与 frontend/dist/，
+# 这个文件是给 IDE / 工具链看的补充说明，不参与构建）
+node_modules/
+dist/
+*.local

@@ -19,9 +19,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
-from app.config import settings
+from app.config import resolve_frontend_dist, settings
 from app.db.session import init_db
 from app.observability import ObservabilityMiddleware
 from app.routes import admin, auth, chat, knowledge, public, roco, system
@@ -52,10 +53,36 @@ async def lifespan(app: FastAPI):
     # 整个应用连页面都渲染不出来，且报错位置极具误导性。
     init_db()
     _log_cache_mode()
+    _log_frontend_mode()
     _start_observability()
     _warm_up()
     yield
     _stop_observability()
+
+
+def _log_frontend_mode() -> None:
+    """启动时说明前端是"后端托管"还是"需要另外起 Vite / Nginx"。
+
+    这件事必须在日志里说清楚：部署时最常见的困惑就是"后端起来了，
+    打开 8000 端口却看到接口文档"，或者"前端页面能打开但接口全 404"。
+    """
+    if not settings.serve_frontend:
+        logger.info(
+            "未托管前端（SERVE_FRONTEND=false）：本进程只提供 /api/v1 接口。"
+            "开发期请另开终端跑 `npm run dev`（5173），"
+            "生产请用 Nginx 托管 frontend/dist 或把 SERVE_FRONTEND 设为 true。"
+        )
+        return
+
+    index_file = resolve_frontend_dist() / "index.html"
+    if index_file.is_file():
+        logger.info("已开启前端托管：打开 http://<本机地址>:端口/ 即为前端页面")
+    else:
+        logger.warning(
+            "SERVE_FRONTEND=true 但前端产物不存在：%s。"
+            "先在 frontend/ 下执行 `npm run build`，或设置 FRONTEND_DIST。",
+            index_file,
+        )
 
 
 def _start_observability() -> None:
@@ -225,11 +252,71 @@ def create_app() -> FastAPI:
     # **只暴露精灵图鉴的公开信息**，见其模块说明。
     app.include_router(public.router)
 
-    @app.get("/", include_in_schema=False)
-    def index():
-        return RedirectResponse(url="/docs")
+    # 前端托管开启时，``/`` 交给下面的 SPA 兜底路由（直接渲染页面）；
+    # 否则保持原有行为：跳到接口文档，方便纯 API 部署时自检。
+    if not settings.serve_frontend:
 
+        @app.get("/", include_in_schema=False)
+        def index():
+            return RedirectResponse(url="/docs")
+
+    _mount_frontend(app)
     return app
+
+
+def _mount_frontend(app: FastAPI) -> None:
+    """把前端构建产物挂到同一个进程里（``SERVE_FRONTEND=true`` 时）。
+
+    **默认不挂**：开发期前端由 Vite 提供，后端只当 API。打开后整个站点
+    只需要一个端口，Ubuntu 上就不必再装 Nginx——这是"最简部署"那条路的
+    实现基础（见 docs/DEPLOY_UBUNTU.md）。
+
+    三个必须做对的点：
+
+    1. **挂载顺序**：所有 ``/api/*`` 路由都在本函数之前注册，所以这里注册的
+       兜底路由不会抢走接口请求。
+    2. **SPA 兜底**：``/strategy``、``/admin/users`` 这些是前端路由，直接访问
+       时服务端并没有对应文件。必须把"不存在的路径"回退到 ``index.html``，
+       否则刷新页面就是 404（前端路由只能接管**已经加载**过的页面）。
+    3. **不吞 ``/api`` 的 404**：接口路径写错时应该看到 JSON 404，
+       而不是被回退成一份 HTML——那会让调用方拿到 ``<!doctype html>``
+       再去 ``JSON.parse``，报出与真实原因无关的错误。
+    """
+    if not settings.serve_frontend:
+        return
+
+    dist = resolve_frontend_dist()
+    index_file = dist / "index.html"
+    if not index_file.is_file():
+        logger.warning(
+            "SERVE_FRONTEND 已开启，但没找到前端产物：%s（先执行 npm run build，"
+            "或用 FRONTEND_DIST 指到实际目录）。后端接口仍然可用。",
+            index_file,
+        )
+        return
+
+    assets_dir = dist / "assets"
+    if assets_dir.is_dir():
+        # 带 hash 的静态资源，可以长缓存
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    logger.info("已托管前端产物：%s", dist)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        # 接口路径不接管：让 FastAPI 正常返回 404 / 405
+        if full_path == "api" or full_path.startswith("api/"):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+        # 真实存在的文件（favicon、robots.txt 等）直接给
+        candidate = (dist / full_path).resolve()
+        # ``is_relative_to`` 是 3.9+；本项目的下限是 3.11，直接用。
+        # 这一句同时挡住了 ``../../etc/passwd`` 这类路径穿越。
+        if candidate.is_relative_to(dist.resolve()) and candidate.is_file():
+            return FileResponse(candidate)
+
+        # 其余一律回 index.html，交给前端路由
+        return FileResponse(index_file)
 
 
 app = create_app()

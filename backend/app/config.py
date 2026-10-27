@@ -19,6 +19,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 RAW_DOCUMENT_DIR = DATA_DIR / "raw_documents"
 SAMPLE_DOC_DIR = BASE_DIR / "sample_docs"
+# 仓库根目录。``BASE_DIR`` 是 ``backend/``，前端产物在它旁边。
+REPO_DIR = BASE_DIR.parent
 
 
 class Settings(BaseSettings):
@@ -46,7 +48,16 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "deepseek-chat"
 
-    embedding_provider: str = "ollama"
+    # 嵌入提供者。默认 ``hash`` 而不是 ``ollama``，理由：
+    #
+    # 本项目的承诺是"空环境也能把界面完整跑起来"。而 ollama 没启动时
+    # 嵌入调用会失败，页面表现为「未找到明确依据」——这是排查检索问题时
+    # 最常见的原因，新手很容易卡在这里以为是代码坏了。
+    #
+    # ``hash`` 是确定性伪嵌入：上传 → 切分 → 入库 → 检索整条链路都是真的，
+    # 只有"检索得准不准"是假的（``/system/health`` 会标 degraded，前端顶部
+    # 也会提示）。把"能跑通"和"有语义"分开，配好模型再改成 ollama 即可。
+    embedding_provider: str = "hash"
     ollama_base_url: str = "http://localhost:11434"
     embedding_model: str = "qwen3-embedding:4b"
     embedding_dim: int = 2560
@@ -146,6 +157,22 @@ class Settings(BaseSettings):
     # 不设上限的话长期运行会慢慢撑大 SQLite。
     checkpoint_max_threads: int = 500
 
+    # ------------------------------------------------------------------ 前端静态托管
+    # 是否由后端**直接托管**前端构建产物（``frontend/dist``）。
+    #
+    # 默认关闭，且**必须显式打开**才生效。原因：
+    # 1. 开发期前端由 Vite 提供，后端托管是多余的；
+    # 2. 打开后会注册一条 SPA 兜底路由（``/{full_path:path}``），
+    #    默认关闭能保证接口行为与"纯 API 服务"完全一致，
+    #    不会因为本机恰好存在 ``frontend/dist`` 就让测试与接口行为发生变化。
+    #
+    # 打开后整个站点只需要**一个端口**（默认 8000），不再需要 Nginx 与
+    # 跨域配置。Ubuntu 上"最简部署"走的就是这条路，见 docs/DEPLOY_UBUNTU.md。
+    serve_frontend: bool = False
+    # 前端产物目录。留空 = ``<仓库根>/frontend/dist``。
+    # 容器镜像里前端产物不在仓库相对位置，所以留一个显式覆盖点。
+    frontend_dist: str = ""
+
     # ------------------------------------------------------------------ 上传与检索
     upload_max_mb: int = 50
     top_k: int = 4
@@ -241,6 +268,14 @@ SAMPLE_DOCS = [
 ]
 
 
+def resolve_frontend_dist() -> Path:
+    """前端构建产物目录。不保证存在——调用方必须自己判存在。"""
+    configured = (settings.frontend_dist or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return REPO_DIR / "frontend" / "dist"
+
+
 def ensure_runtime_dirs() -> None:
     """建运行时目录。
 
@@ -248,3 +283,12 @@ def ensure_runtime_dirs() -> None:
     数据库抖动会让整个应用连页面都渲染不出来，且报错位置极具误导性。
     """
     RAW_DOCUMENT_DIR.mkdir(parents=True, exist_ok=True)
+    # SQLite 的父目录也可能被 DATABASE_URL 指到别处（见 db/session.py 的说明），
+    # 这里顺手建出来，避免"换了个 DATABASE_URL 就启动失败"。
+    if settings.database_url.startswith("sqlite"):
+        _, _, tail = settings.database_url.partition(":///")
+        if tail and tail not in (":memory:",):
+            try:
+                Path(tail).expanduser().parent.mkdir(parents=True, exist_ok=True)
+            except OSError:  # noqa: BLE001 - 目录问题交给建库时报错，别在这里中断启动
+                pass

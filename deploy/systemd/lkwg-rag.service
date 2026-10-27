@@ -1,0 +1,49 @@
+[Unit]
+Description=洛克王国 PvP 阵容攻略 Agent（FastAPI 后端 + 前端托管）
+Documentation=file://@APP_DIR@/docs/DEPLOY_UBUNTU.md
+# network-online.target：需要联网才能调 LLM / 嵌入服务，等网络就绪再启动，
+# 避免开机时抢跑导致第一次请求失败。
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@RUN_USER@
+Group=@RUN_USER@
+WorkingDirectory=@APP_DIR@/backend
+
+# 环境变量全部来自 backend/.env（由 pydantic-settings 读取），这里不重复声明，
+# 避免"两处配置不一致"这类最难排查的问题。
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=@APP_DIR@/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin
+
+# --host 0.0.0.0 才能被外部访问（默认只监听 127.0.0.1）。
+# **不要加 --reload**：那是开发用的，会在生产环境起两个进程并反复重启。
+ExecStart=@APP_DIR@/backend/.venv/bin/python -m uvicorn app.main:app \
+    --host 0.0.0.0 --port @APP_PORT@ \
+    --proxy-headers --forwarded-allow-ips='*'
+
+# 后端跑的是同步 LLM 调用，重启时要给它时间收尾，不要直接 SIGKILL。
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+
+# 日志走 journald：journalctl -u lkwg-rag -f 直接看。
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lkwg-rag
+
+# --------------------------------------------------------------------------- 安全加固
+# 这些是"最小权限"的常规项，不影响功能：
+#  - 后端只需要读写仓库目录（SQLite 库、上传原文、checkpoint 都在 backend/data 下）
+#  - 不需要创建新特权进程
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+# 唯一需要可写的系统目录：/tmp（PrivateTmp 已经隔离）与仓库自身
+ReadWritePaths=@APP_DIR@
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,92 @@
+# 容器编排：后端 + 前端产物在同一个镜像里，一个服务一个端口。
+#
+# 用法（在仓库根目录）：
+#     cp backend/.env.example backend/.env     # 按需改
+#     docker compose -f deploy/docker/docker-compose.yml up -d --build
+#
+# 打开 http://<服务器IP>:8000/ 即可。
+#
+# 说明：**不需要单独的 Nginx 容器**。FastAPI 打开 SERVE_FRONTEND 后
+# 直接把 frontend/dist 发出去，SSE 也不经过额外代理（少一层就少一类
+# "流式不生效"的故障）。如果将来要做多站点/HTTPS，再在前面加 Nginx。
+
+services:
+  lkwg-rag:
+    build:
+      # 上下文是**仓库根目录**：镜像要同时用 backend/ 与 frontend/
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: lkwg-rag:latest
+    container_name: lkwg-rag
+    restart: unless-stopped
+
+    ports:
+      # 只对外暴露一个端口。想只允许本机访问就改成 "127.0.0.1:8000:8000"
+      - "8000:8000"
+
+    env_file:
+      # 所有配置都从这里来（.env 已被 .gitignore 排除，不会进版本库）。
+      # 变量名与 backend/.env.example 完全一致。
+      #
+      # ``required: false``：没有 .env 也能起来（全部走默认值）。
+      # 但那样 JWT_SECRET 会是每次启动随机生成——重启后所有人都要重新登录。
+      # 所以强烈建议先 `cp backend/.env.example backend/.env`。
+      - path: ../../backend/.env
+        required: false
+
+    environment:
+      # 覆盖 .env 里可能写成本机路径的项，容器内必须是容器内路径。
+      SERVE_FRONTEND: "true"
+      FRONTEND_DIST: /app/frontend/dist
+      DATABASE_URL: sqlite:////app/backend/data/rag.db
+      TZ: Asia/Shanghai
+      # 容器里连宿主机服务（如宿主机的 Ollama / Redis）要用这个特殊域名，
+      # 不能用 127.0.0.1（那是容器自己）。
+      # OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # REDIS_URL: redis://redis:6379/0
+
+    volumes:
+      # 数据卷：SQLite 库、上传原文、checkpoint 全在 /app/backend/data。
+      # 不挂出来容器重建就全丢了。
+      - lkwg-rag-data:/app/backend/data
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+    logging:
+      # 不限制的话，长期运行会把宿主机磁盘写满。
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ------------------------------------------------------------------ 可选：Redis
+    # 单进程部署不需要。多实例/多 worker 部署**必须**配，
+    # 否则登录限流与令牌吊销不跨进程生效（看起来正常，实则有安全缺口）。
+    #
+    # 打开方式：去掉下面两段注释，并在 backend/.env 里设
+    #     REDIS_URL=redis://redis:6379/0
+    #
+    # depends_on:
+    #   - redis
+
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: lkwg-rag-redis
+  #   restart: unless-stopped
+  #   command: ["redis-server", "--appendonly", "yes"]
+  #   volumes:
+  #     - lkwg-rag-redis:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+
+volumes:
+  lkwg-rag-data:
+  # lkwg-rag-redis:

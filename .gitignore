@@ -65,6 +65,15 @@ node_modules/
 frontend/dist/
 *.local
 
+# ★ package-lock.json **必须入库**（不要加到忽略列表）。
+# 它是 Ubuntu / Docker 部署时 `npm ci` 的依据：没有它就无法保证
+# "服务器上装出来的依赖和开发机完全一致"，也无法复现问题。
+# pnpm-lock.yaml 同样保留（用 pnpm 的人走那条路）。
+#
+# 反过来，以下这些**是**运行时产物，不该入库：
+.pnpm-store/
+frontend/.vite/
+
 # 本地配置与密钥 —— **本仓库会公开，这一节是最后一道防线**
 #
 # 只写 `.env` 是不够的：`.env.local`、`backend/.env.prod` 这类变体
@@ -105,7 +114,6 @@ kubeconfig*
 
 # 工具产物
 _acl-recovery/
-.pnpm-store/
 pip-build-tracker-*/
 pip-ephem-wheel-cache-*/
 pip-install-*/

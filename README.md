@@ -6,12 +6,17 @@
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.x-orange.svg)](https://langchain-ai.github.io/langgraph/)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-4.x-38bdf8.svg)](https://tailwindcss.com/)
 [![daisyUI](https://img.shields.io/badge/daisyUI-5.x-5a0ef8.svg)](https://daisyui.com/)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420.svg)](docs/DEPLOY_UBUNTU.md)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](deploy/docker/docker-compose.yml)
 
 选一只精灵 → 查出**真实玩家投稿里包含它的阵容**（精确反查，不是模糊相似）→
 大模型结合队友统计与属性克制给出推荐。
 
 **不配任何外部服务也能启动**：仓库自带精灵图鉴、技能、阵容种子数据，
 嵌入可切本地伪向量模式，界面与检索链路完整。
+
+**部署**：Ubuntu 上一条命令装完（`bash deploy/install.sh`），
+也支持 Docker；完整手册见 [docs/DEPLOY_UBUNTU.md](docs/DEPLOY_UBUNTU.md)。
 
 ## 核心特性
 
@@ -27,12 +32,16 @@
 
 ## 快速开始
 
+> **部署到 Ubuntu 服务器？** 直接看 [docs/DEPLOY_UBUNTU.md](docs/DEPLOY_UBUNTU.md)，
+> 那是从 `git clone` 到浏览器打开的完整手册（含一键脚本、systemd、Nginx、Docker）。
+> 本节是跨平台的开发期快速开始。
+
 ### 前置条件
 
 只需要装这两样，其余全部可选：
 
-- **Python 3.11+**（[下载](https://www.python.org/downloads/)，安装时勾选 `Add Python to PATH`）
-- **Node.js 20+**（[下载](https://nodejs.org/)，选 LTS 版）
+- **Python 3.11+**（[下载](https://www.python.org/downloads/)，Windows 安装时勾选 `Add Python to PATH`）
+- **Node.js 20.19+ 或 22.12+**（[下载](https://nodejs.org/)，选 LTS 版）
 
 以下**都不是必需的**，不装也能把界面完整跑起来：
 
@@ -73,7 +82,7 @@ python -m app.scraper.seed_loader
 
 ```bash
 cd frontend
-pnpm install          # 或 npm install，两者都可以
+npm install           # 或 pnpm install，两者都可以
 ```
 
 没装 pnpm 的话，用 Node 自带的 npm 就行（会多几条无害的配置警告，可忽略）。
@@ -86,19 +95,27 @@ pnpm install          # 或 npm install，两者都可以
 
 ```bash
 cd backend
+# Windows
 .venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
+# macOS / Linux
+.venv/bin/python -m uvicorn app.main:app --reload --port 8000
 ```
 
 **终端 2 —— 前端：**
 
 ```bash
 cd frontend
-pnpm dev              # 或 npm run dev
+npm run dev
 ```
 
 浏览器打开 **http://localhost:5173** 即可使用。
 
 > 后端的接口文档在 http://127.0.0.1:8000/docs 。
+>
+> 前端 dev server 默认只监听 `127.0.0.1`。要在**另一台机器**的浏览器里访问
+> 开发服务器（例如远程 Linux 上跑、本机浏览器看），用
+> `VITE_DEV_HOST=0.0.0.0 npm run dev`；后端地址不是本机 8000 时用
+> `VITE_API_TARGET=http://后端IP:8000 npm run dev`。
 
 ### 第 4 步：登录
 
@@ -112,6 +129,24 @@ pnpm dev              # 或 npm run dev
 
 到这里界面就完整可用了：上传、切分、入库、检索、流式渲染都是真的。
 但问答要给出有意义的回答，还需要配置对话模型与嵌入模型（见下一节）。
+
+### 只想单端口跑起来（不需要两个终端）
+
+后端可以**直接托管前端构建产物**，这样整个站点只需要一个端口，
+不用开两个终端、也不用配代理：
+
+```bash
+cd frontend && npm run build && cd ..     # 先构建一次
+
+cd backend
+cp .env.example .env                      # 首次需要
+# 把 .env 里的 SERVE_FRONTEND=false 改成 true
+.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+浏览器打开 **http://localhost:8000** 就是完整页面。
+Ubuntu 服务器部署走的就是这条路，见 [docs/DEPLOY_UBUNTU.md](docs/DEPLOY_UBUNTU.md)。
+
 
 ## 让问答真正可用
 
@@ -143,6 +178,10 @@ LLM_MODEL=deepseek-chat
 
 ### 嵌入模型（三选一）
 
+**默认是 `hash` 伪嵌入**：不装任何外部服务就能把「上传 → 切分 → 入库 → 检索」
+整条链路跑通，代价是检索结果**没有语义意义**（`/system/health` 标 degraded，
+前端顶部也会提示）。要让检索真正好用，从下面两种里选一种。
+
 **方式 A：本地 Ollama（推荐，免费）**
 
 ```bash
@@ -170,6 +209,9 @@ EMBEDDING_API_KEY=sk-你的key
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIM=1536
 ```
+
+> **换嵌入模型必须清空已有切片重新入库**（不同模型的向量不可比，混在一起
+> 会让检索结果完全错乱，而且**不报错**）。删掉 `backend/data/rag.db` 重启即可。
 
 ### 验证配置
 
@@ -436,17 +478,42 @@ LKWG_RAG/
 │   ├── tests/                    # pytest（259 项）
 │   ├── requirements.txt
 │   └── .env.example
-└── frontend/
-    ├── src/
-    │   ├── style.css             # 主题 + 属性色板 + 壁纸/玻璃令牌（唯一来源）
-    │   ├── api/                  # http(拦截) / sse(手写流解析) / 各资源模块
-    │   ├── stores/               # auth / chat / knowledge / admin / roco
-    │   ├── composables/          # useMarkdown / useTheme / useWallpaper / wallpapers
-    │   ├── components/           # chat / knowledge / layout / roco
-    │   └── views/                # 登录注册 / 问答 / 阵容攻略 / 知识库 / admin
-    ├── vite.config.ts            # @tailwindcss/vite 插件 + /api 代理
-    └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── style.css             # 主题 + 属性色板 + 壁纸/玻璃令牌（唯一来源）
+│   │   ├── api/                  # http(拦截) / sse(手写流解析) / 各资源模块
+│   │   ├── stores/               # auth / chat / knowledge / admin / roco
+│   │   ├── composables/          # useMarkdown / useTheme / useWallpaper / wallpapers
+│   │   ├── components/           # chat / knowledge / layout / roco
+│   │   └── views/                # 登录注册 / 问答 / 阵容攻略 / 知识库 / admin
+│   ├── vite.config.ts            # @tailwindcss/vite 插件 + /api 代理（地址可配）
+│   └── package.json
+├── deploy/                       # ★ 部署
+│   ├── install.sh                # Ubuntu 一键安装（依赖 + 构建 + .env + 种子数据）
+│   ├── systemd/lkwg-rag.service  # 开机自启
+│   ├── nginx/lkwg-rag.conf       # 前端静态 + /api 反代（SSE 不缓冲）
+│   └── docker/                   # Dockerfile / docker-compose.yml / entrypoint.py
+├── docs/
+│   └── DEPLOY_UBUNTU.md          # ★ 从 GitHub 拉取到启动的完整部署手册
+└── .dockerignore
 ```
+
+## 部署
+
+| 方式 | 命令 | 适用 |
+| --- | --- | --- |
+| **Ubuntu 一键** | `bash deploy/install.sh` | 服务器部署，最省事 |
+| **Ubuntu + systemd** | `bash deploy/install.sh --with-systemd` | 开机自启，一个端口 |
+| **Ubuntu + Nginx** | `bash deploy/install.sh --with-systemd --with-nginx` | 需要 80 端口 / 域名 / HTTPS |
+| **Docker** | `docker compose -f deploy/docker/docker-compose.yml up -d --build` | 已装 Docker 的环境 |
+
+**AI 相关配置（LLM key / 嵌入模型 / Tavily）全部可以留空**：留空时图鉴、
+阵容查询、知识库上传切分检索、登录注册、管理后台都可用，只有"问答生成答案"
+那一步会返回一条可读的错误提示。填 key 的步骤见
+[docs/DEPLOY_UBUNTU.md 第 6 节](docs/DEPLOY_UBUNTU.md#6-配置-ai可以留空)。
+
+`SERVE_FRONTEND=true` 时后端**直接托管** `frontend/dist`，
+整个站点只需要一个端口，不需要 Nginx，也不需要配跨域。
 
 ## API 路由
 
@@ -551,7 +618,14 @@ data: {"type":"error","message":"..."}
 
 ## 环境变量
 
-下表列出常用的：
+下表列出常用的（完整注释见 `backend/.env.example`）：
+
+### 前端托管
+
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `SERVE_FRONTEND` | 后端是否直接托管 `frontend/dist`。`true` 时整个站点只需一个端口 | `false` |
+| `FRONTEND_DIST` | 前端产物目录。留空 = 仓库根下的 `frontend/dist` | 空 |
 
 ### 必填
 
@@ -581,7 +655,7 @@ python -c "import secrets;print(secrets.token_urlsafe(48))"
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `EMBEDDING_PROVIDER` | `ollama` / `openai` / `hash` | `ollama` |
+| `EMBEDDING_PROVIDER` | `hash` / `ollama` / `openai` | `hash`（无需外部服务即可跑通链路，但检索无语义） |
 | `OLLAMA_BASE_URL` | Ollama 地址 | `http://localhost:11434` |
 | `EMBEDDING_MODEL` | 嵌入模型名 | `qwen3-embedding:4b` |
 | `EMBEDDING_DIM` | 向量维度，**必须与模型一致** | `2560` |
