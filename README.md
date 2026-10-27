@@ -31,6 +31,7 @@
 - **注册需审批** — 新用户 `pending` 状态登录失败，管理员通过后才能用；root 不落库
 
 ## 快速开始
+
 ### 前置条件
 
 只需要装这两样，其余全部可选：
@@ -319,14 +320,14 @@ START → classify → retrieve ─┐
 知识库里一条可检索的切片都没有时**直接短路**，不启动 Planner + N 次 Researcher。
 实测空分类下整轮耗时 **0.02 秒、0 次 LLM 调用**。
 
-## 为什么结构化表和向量检索都要
+## 结构化表与向量检索的分工
 
-它们回答的是**两类不同问题**：
+两者回答的是**两类不同问题**：
 
-| 问题 | 走哪条路 | 为什么 |
+| 提问类型 | 走哪条路 | 为什么 |
 | --- | --- | --- |
-| 「哪些阵容里有寂灭骨龙？」 | `lineup_members` 索引 | 这是**精确关系查询**。向量检索答不了——它只能给"相关"，给不出"有 32 套"，还会漏 |
-| 「什么阵容克制水系？」 | 向量检索 `document_chunks` | 这是语义问题，没有确定的关键词可匹配 |
+| 「哪些阵容里有寂灭骨龙」 | `lineup_members` 索引 | 这是**精确关系查询**。向量检索答不了——它只能给"相关"，给不出"有 32 套"，还会漏 |
+| 「什么阵容克制水系」 | 向量检索 `document_chunks` | 这是语义问题，没有确定的关键词可匹配 |
 
 所以导入阵容时**两边都写**：结构化行 + 渲染成文本灌进向量库。
 这不是冗余，是两种查询模式各自的必需品。
@@ -425,6 +426,8 @@ REDIS_URL=redis://127.0.0.1:6379/0
 
 登录失败时前端统一提示：
 
+> 用户名或密码错误，或账号尚未通过管理员审批。
+
 这句对「用户不存在」「口令错误」「待审批」三种情况都成立，**既不泄露账号是否存在，
 也不让待审批的用户干等**。真正的失败原因只写进服务端日志。
 
@@ -485,6 +488,7 @@ LKWG_RAG/
 │   └── package.json
 ├── deploy/                       # ★ 部署
 │   ├── install.sh                # Ubuntu 一键安装（依赖 + 构建 + .env + 种子数据）
+│   ├── check.sh                  # 部署自检（15 项探测，只读不写）
 │   ├── systemd/lkwg-rag.service  # 开机自启
 │   ├── nginx/lkwg-rag.conf       # 前端静态 + /api 反代（SSE 不缓冲）
 │   └── docker/                   # Dockerfile / docker-compose.yml / entrypoint.py
@@ -501,6 +505,12 @@ LKWG_RAG/
 | **Ubuntu + systemd** | `bash deploy/install.sh --with-systemd` | 开机自启，一个端口 |
 | **Ubuntu + Nginx** | `bash deploy/install.sh --with-systemd --with-nginx` | 需要 80 端口 / 域名 / HTTPS |
 | **Docker** | `docker compose -f deploy/docker/docker-compose.yml up -d --build` | 已装 Docker 的环境 |
+
+装完启动后跑一次自检，确认每个环节都通：
+
+```bash
+bash deploy/check.sh
+```
 
 **AI 相关配置（LLM key / 嵌入模型 / Tavily）全部可以留空**：留空时图鉴、
 阵容查询、知识库上传切分检索、登录注册、管理后台都可用，只有"问答生成答案"

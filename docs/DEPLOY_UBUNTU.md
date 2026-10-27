@@ -1,15 +1,15 @@
 # Ubuntu 部署手册：从 GitHub 拉取到前后端启动
 
-本文是**从零开始**的完整部署手册。假设你手上是一台刚装好的 Ubuntu 服务器，
+本文是**从零开始**的完整部署手册，假设服务器是一台刚装好的 Ubuntu，
 除了能 SSH 登录之外什么都没有。照着做完就能在浏览器里打开项目。
 
 - 目标系统：**Ubuntu 22.04 LTS**（24.04 同样适用，差异处会单独标注）
 - 部署方式：宿主机直接装依赖（另有 Docker 方式，见[第 8 节](#8-docker-方式可选)）
 - **AI 相关配置全部留空也能跑起来**：图鉴、阵容查询、知识库上传/切分/检索、
-  登录注册、管理后台都是真的可用，只有"问答要模型生成答案"那一步需要你填 key。
+  登录注册、管理后台都可用，只有"问答要模型生成答案"那一步需要填 key。
 
-> 全文命令都是**在服务器上**执行的。`$` 开头的行表示普通用户命令，
-> `#` 开头的行表示需要 root（用 `sudo`）。
+> 全文命令都在**服务器上**执行。需要 root 权限的命令已显式写成 `sudo ...`，
+> 没有 `sudo` 的就是当前用户执行。
 
 ---
 
@@ -89,7 +89,7 @@ hostname -I | awk '{print $1}'
 **这一步可以跳过**：第 4 节的 `install.sh` 会自动做。
 想手动一步步来、或者想先看清楚装了什么，看[第 11 节附录](#11-附录手动安装逐步说明)。
 
-简单说需要三样东西：
+需要三样东西：
 
 | 依赖 | 版本要求 | 用途 | Ubuntu 22.04 自带 |
 | --- | --- | --- | --- |
@@ -290,7 +290,7 @@ http://<服务器IP>:8000/
 - **知识库**页：能上传文档、切分、看切片
 - 右上角有主题切换、壁纸选择
 
-### 5.3 云服务器打不开？先查安全组
+### 5.3 云服务器打不开时先查安全组
 
 如果服务器本机 `curl` 通、但浏览器打不开，**九成是云厂商的安全组/防火墙**。
 
@@ -377,7 +377,7 @@ bash deploy/check.sh http://your-domain.com
 
 ## 6. 配置 AI（可以留空）
 
-**这一节是可选的。** 不做任何配置，下面这些功能已经是**真的可用**：
+**这一节是可选的。** 不做任何配置，下面这些功能已经可用：
 
 | 功能 | 留空时状态 |
 | --- | --- |
@@ -418,8 +418,8 @@ LLM_MODEL=deepseek-chat
 | 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
 | 本地 Ollama | `http://localhost:11434/v1` | `qwen2.5:7b` |
 
-> ⚠️ **DeepSeek 用户注意**：`STRUCTURED_OUTPUT_METHOD` 必须保持
-> `function_calling`（默认值，别改）。DeepSeek 不支持 `json_schema`，
+> ⚠️ **DeepSeek 注意**：`STRUCTURED_OUTPUT_METHOD` 必须保持
+> `function_calling`（默认值，不要改）。DeepSeek 不支持 `json_schema`，
 > 而这个错误**不会中断流程**——只会让 Planner 永远只拆一个单元、
 > 检索结论退化成原文摘要，很容易被误判成"模型能力不行"。
 
@@ -433,7 +433,7 @@ EMBEDDING_DIM=2560
 ```
 
 `hash` 是**确定性伪嵌入**：上传/切分/入库/检索的链路全是真的，只有"语义相似度"
-是假的。它让你**不装任何外部服务**就能把整条链路跑通，`/system/health`
+是假的。它让**不装任何外部服务**也能把整条链路跑通，`/system/health`
 会把它标成 `degraded`，前端顶部也会提示。
 
 三种升级方式，任选其一：
@@ -577,7 +577,7 @@ sudo journalctl -u lkwg-rag -n 100   # 看最近 100 行
 ### 7.4 服务起不来的排查顺序
 
 ```bash
-# 1) 看日志，90% 的问题这里直接有答案
+# 1) 看日志，多数问题这里直接有答案
 sudo journalctl -u lkwg-rag -n 80 --no-pager
 
 # 2) 手工前台跑一遍，看是否有更详细的报错
@@ -591,7 +591,7 @@ grep -vE '^\s*#|^\s*$' /opt/LKWG_RAG/backend/.env
 sudo ss -tlnp | grep 8000
 ```
 
-### 7.5 配 HTTPS（有域名的话）
+### 7.5 配 HTTPS（有域名时）
 
 用 Let's Encrypt 免费证书，两条命令：
 
@@ -622,7 +622,7 @@ nano /opt/LKWG_RAG/backend/.env
       删掉 `deploy/nginx/lkwg-rag.conf` 里 `location ~ ^/(docs|redoc|openapi\.json)$`
       那一段即可
 - [ ] **多进程部署必须配 Redis**
-      单进程（默认）用进程内缓存完全够用。但如果你改成 `--workers 4`，
+      单进程（默认）用进程内缓存完全够用。改成 `--workers 4` 时，
       **必须**配 Redis，否则登录限流与令牌吊销不跨进程生效——
       这是"看起来正常、实则有安全缺口"的情况：
 
@@ -652,7 +652,7 @@ sudo tar czf ~/lkwg-backup-$(date +%F).tar.gz -C /opt/LKWG_RAG/backend data/
 
 ## 8. Docker 方式（可选）
 
-如果服务器已经装了 Docker，或者你更喜欢容器化，用这条路径。
+服务器已经装了 Docker、或偏好容器化时用这条路径。
 **同样只需要一个端口**，不需要额外的 Nginx 容器。
 
 ### 8.1 前置条件
@@ -662,7 +662,7 @@ docker --version           # 需要 20.10+
 docker compose version     # 需要 v2（注意是 `docker compose`，中间有空格）
 ```
 
-没装 Docker 的话：
+没装 Docker 时：
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
@@ -709,7 +709,7 @@ INFO:     Application startup complete.
 ### 8.4 验证
 
 ```bash
-# 用 compose 跑自检（容器名解析不进去，用宿主机地址）
+# 跑自检（用宿主机地址，容器名在宿主机上解析不到）
 bash deploy/check.sh http://127.0.0.1:8000
 ```
 
@@ -770,7 +770,7 @@ sudo systemctl edit ollama
 sudo systemctl daemon-reload && sudo systemctl restart ollama
 ```
 
-### 8.8 Docker 方式改代码后怎么更新
+### 8.8 Docker 方式更新代码
 
 ```bash
 cd /opt/LKWG_RAG
@@ -830,8 +830,8 @@ cd /opt/LKWG_RAG/backend
 .venv/bin/python -m app.scraper.seed_loader    # 再重新导入，把 URL 写进数据库
 ```
 
-> ⚠️ 爬虫抓的数据写库后，**不要再用 `install.sh` 跑种子导入**——
-> 那会清表重写。要重跑脚本时加 `--skip-seed`。
+> ⚠️ 爬虫数据写库后，**不要再用 `install.sh` 跑种子导入**——
+> 那会清表重写。重跑脚本时加 `--skip-seed`。
 
 ### 9.3 查看日志
 
@@ -871,7 +871,7 @@ sudo journalctl -u lkwg-rag -p err --no-pager -n 50
 按顺序查：
 
 ```bash
-# 1) 端口监听地址对不对（必须是 0.0.0.0，不能是 127.0.0.1）
+# 1) 端口监听地址（必须是 0.0.0.0，不能是 127.0.0.1）
 sudo ss -tlnp | grep 8000
 
 # 2) 本机防火墙
@@ -885,14 +885,14 @@ sudo ufw status
 前端代码里用的是相对路径 `/api/v1/...`，所以只可能是**同源的反向代理没配好**：
 
 - **后端托管前端**（`SERVE_FRONTEND=true`）：不应该出现这个错。
-  检查是不是访问了别的端口（比如错误地访问了 5173）。
+  确认访问的是后端端口，而不是前端开发服务器的 5173。
 - **Nginx 方式**：检查 `/etc/nginx/sites-available/lkwg-rag` 里
   `location /api/` 的 `proxy_pass` 端口与后端实际端口是否一致。
   `sudo nginx -t && sudo systemctl reload nginx`
 - **前后端分机部署**：需要在 `frontend/` 下建 `.env` 写
   `VITE_API_TARGET=http://后端IP:8000`，但**生产环境不推荐**——用同源代理更简单。
 
-### 10.3 登录提示「用户名或口令错误」（但账号密码没错）
+### 10.3 登录提示「用户名或口令错误」，但账号密码确认无误
 
 三种情况共用这一句提示（刻意不区分，防止用户名枚举）：
 
@@ -907,18 +907,18 @@ sudo ufw status
 这是**检索没拿到材料**，不是模型的问题。按顺序查：
 
 ```bash
-# 1) 知识库里到底有没有可检索的切片？
+# 1) 确认知识库里有没有可检索的切片
 TOKEN=$(curl -sS -X POST http://127.0.0.1:8000/api/v1/auth/login \
   -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["access_token"])')
 curl -sS http://127.0.0.1:8000/api/v1/knowledge_base/list_files \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool | head -30
 
-# 2) 嵌入服务在不在？
+# 2) 确认嵌入服务可用
 curl -sS http://127.0.0.1:8000/api/v1/system/health \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 
-# 3) 如果用了 Ollama，确认它真的在跑
+# 3) 用了 Ollama 时，确认它在跑
 curl -s http://localhost:11434/api/tags | head -c 300
 ```
 
@@ -933,7 +933,7 @@ curl -s http://localhost:11434/api/tags | head -c 300
 # 检查 .env 里有没有填（注意不要有多余空格或引号）
 grep '^LLM_' /opt/LKWG_RAG/backend/.env
 
-# 检查能不能连上你的模型服务
+# 检查能否连上你的模型服务
 curl -sS -o /dev/null -w '%{http_code}\n' https://api.deepseek.com
 ```
 
@@ -950,7 +950,7 @@ sudo systemctl restart lkwg-rag
 - **Nginx 方式**：确认配置里有 `proxy_buffering off;`
   （`deploy/nginx/lkwg-rag.conf` 已经写了，`sudo nginx -t && sudo systemctl reload nginx`）
 - **又套了一层 CDN/负载均衡**：那层的缓冲也要关，或者直接绕过它
-- **后端托管前端**（单端口）：不应该有这个问题，`X-Accel-Buffering: no` 已由后端发出
+- **后端托管前端**（单端口）：不应出现这个问题，`X-Accel-Buffering: no` 已由后端发出
 
 ### 10.7 国内网络装依赖很慢或失败
 
@@ -974,9 +974,7 @@ npm config set registry https://registry.npmmirror.com
 #### GitHub 慢或 clone 失败
 
 ```bash
-# 方案一：用镜像站
-git clone https://gitee.com/mirrors_trending/LKWG_RAG.git   # 如果存在镜像
-# 或者用 ghproxy 类加速：
+# 方案一：用镜像加速站
 git clone https://ghproxy.net/https://github.com/qjwmx/LKWG_RAG.git
 
 # 方案二：本地下载 zip，传到服务器
@@ -986,7 +984,7 @@ git clone https://ghproxy.net/https://github.com/qjwmx/LKWG_RAG.git
 
 #### NodeSource 源慢
 
-`install.sh` 用的是 NodeSource。如果它装不上，用 Node 官方二进制包：
+`install.sh` 用的是 NodeSource。它装不上时，用 Node 官方二进制包：
 
 ```bash
 # 手动装 Node 22
@@ -998,7 +996,7 @@ node -v && npm -v
 
 #### deadsnakes PPA 装不上 Python 3.11
 
-`install.sh` 已经内置了自动回退到 `uv` 的逻辑。如果两条都失败，手动装：
+`install.sh` 已经内置了自动回退到 `uv` 的逻辑。两条都失败时手动装：
 
 ```bash
 # 用 uv（推荐，不依赖 launchpad）
@@ -1032,7 +1030,7 @@ sudo ss -tlnp | grep 8000      # 看是谁占的
 APP_PORT=9000 bash deploy/install.sh --with-systemd
 ```
 
-### 10.10 重启后登录状态丢了
+### 10.10 重启后登录状态丢失
 
 `backend/.env` 里 `JWT_SECRET` 是空的，每次启动随机生成，旧 token 全部失效。
 
@@ -1046,10 +1044,10 @@ sudo systemctl restart lkwg-rag
 
 `install.sh` 生成的 `.env` 已经自动填好了这一项。
 
-### 10.11 想看后端接口文档
+### 10.11 查看后端接口文档
 
 浏览器打开 `http://<服务器IP>:8000/docs`。点右上角 **Authorize**，
-填登录拿到的 token 就能测所有接口。
+填登录拿到的 token 即可测试所有接口。
 
 > 对外提供服务时建议关掉（见 [7.6 节](#76-安全加固清单对外提供服务前必须做)）。
 
@@ -1057,7 +1055,7 @@ sudo systemctl restart lkwg-rag
 
 ## 11. 附录：手动安装逐步说明
 
-不想用一键脚本时，照着这里一步步来。**和 `install.sh` 做的事完全一致。**
+不使用一键脚本时，按本节逐步执行。**和 `install.sh` 做的事完全一致。**
 
 ### 11.1 装 Git
 
@@ -1078,7 +1076,7 @@ sudo apt install -y python3.11 python3.11-venv python3.11-dev
 python3.11 --version        # 期望：Python 3.11.x
 ```
 
-> 如果 `add-apt-repository` 卡住或报错（launchpad 不可达），改用 uv：
+> `add-apt-repository` 卡住或报错时（launchpad 不可达），改用 uv：
 > ```bash
 > curl -LsSf https://astral.sh/uv/install.sh | sh
 > ~/.local/bin/uv python install 3.12
@@ -1120,7 +1118,7 @@ python3.11 -m venv .venv                      # 24.04 用 python3
 ```
 
 > 依赖约 60 个包，其中 `numpy` / `lxml` / `tiktoken` 有预编译轮子，
-> 正常 2~5 分钟装完。如果卡在编译（看到 `Building wheel for ...`），
+> 正常 2~5 分钟装完。卡在编译（看到 `Building wheel for ...`）时，
 > 说明缺 `build-essential`：
 > `sudo apt install -y build-essential libffi-dev libssl-dev libsqlite3-dev`
 
@@ -1173,7 +1171,7 @@ cd /opt/LKWG_RAG/backend
 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-浏览器打开 `http://<服务器IP>:8000/`，`admin` / 你设的口令登录。
+浏览器打开 `http://<服务器IP>:8000/`，用 `admin` 与上一步设置的口令登录。
 
 ### 11.10 装成系统服务
 
@@ -1221,7 +1219,7 @@ sudo systemctl status lkwg-rag
 └── docs/DEPLOY_UBUNTU.md       # 本文
 ```
 
-| 我想改… | 改哪里 | 改完要做什么 |
+| 需要修改的项 | 修改位置 | 修改后操作 |
 | --- | --- | --- |
 | 端口 | `--port` 参数 / systemd 的 `APP_PORT` | 重启服务 |
 | 管理员账号口令 | `backend/.env` 的 `ADMIN_*` | 重启服务 |
@@ -1232,23 +1230,23 @@ sudo systemctl status lkwg-rag
 
 ---
 
-## 附：最短路径（TL;DR）
+## 附：最短路径
 
-已经装好 Docker 的话：
+已装 Docker 时：
 
 ```bash
 git clone https://github.com/qjwmx/LKWG_RAG.git && cd LKWG_RAG
 cp backend/.env.example backend/.env
 sed -i 's/^SERVE_FRONTEND=.*/SERVE_FRONTEND=true/' backend/.env
 docker compose -f deploy/docker/docker-compose.yml up -d --build
-# 打开 http://<服务器IP>:8000/  admin / admin
+# 打开 http://<服务器IP>:8000/  账号 admin / admin
 ```
 
-没有 Docker 的话：
+没有 Docker 时：
 
 ```bash
 git clone https://github.com/qjwmx/LKWG_RAG.git && cd LKWG_RAG
 bash deploy/install.sh
 cd backend && .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-# 打开 http://<服务器IP>:8000/  admin / admin
+# 打开 http://<服务器IP>:8000/  账号 admin / admin
 ```
