@@ -31,11 +31,6 @@
 - **注册需审批** — 新用户 `pending` 状态登录失败，管理员通过后才能用；root 不落库
 
 ## 快速开始
-
-> **部署到 Ubuntu 服务器？** 直接看 [docs/DEPLOY_UBUNTU.md](docs/DEPLOY_UBUNTU.md)，
-> 那是从 `git clone` 到浏览器打开的完整手册（含一键脚本、systemd、Nginx、Docker）。
-> 本节是跨平台的开发期快速开始。
-
 ### 前置条件
 
 只需要装这两样，其余全部可选：
